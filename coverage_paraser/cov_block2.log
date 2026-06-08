@@ -1,0 +1,20 @@
+========================================================
+Verification Coverage Report
+========================================================
+
+--- Global Metrics ---
+Line Coverage      : 82.3%
+Branch Coverage    : 78.5%
+Condition Coverage : 70.2%
+Toggle Coverage    : 85.0%
+FSM Coverage       : 90.0%
+Functional Coverage: 80.1%
+
+--- Functional Bin Summary ---
+Total Bins         : 3200
+Covered Bins       : 2624
+Uncovered Bins     : 576
+
+--- Hierarchical Module Breakdown ---
+
+========================================================
