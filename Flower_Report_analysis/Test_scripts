@@ -1,0 +1,96 @@
+import os
+import subprocess
+import datetime
+import glob
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+
+EXCEL_FILE = "flow_results.xlsx"
+LOG_DIR    = "./flow_logs"
+
+# ── FLOW STAGES — edit commands to match your tools ─────
+FLOW_STAGES = [
+    {"name": "RTL Lint",      "cmd": "vlint {rtl}",                        "log": "lint.log"},
+    {"name": "Synthesis",     "cmd": "dc_shell -f synth.tcl > {log}",      "log": "synth.log"},
+    {"name": "Floorplan",     "cmd": "innovus -script fp.tcl > {log}",     "log": "floorplan.log"},
+    {"name": "Placement",     "cmd": "innovus -script place.tcl > {log}",  "log": "placement.log"},
+    {"name": "CTS",           "cmd": "innovus -script cts.tcl > {log}",    "log": "cts.log"},
+    {"name": "Routing",       "cmd": "innovus -script route.tcl > {log}",  "log": "routing.log"},
+    {"name": "STA Signoff",   "cmd": "pt_shell -f sta.tcl > {log}",        "log": "sta.log"},
+    {"name": "DRC",           "cmd": "calibre -drc -hier drc.rules > {log}","log":"drc.log"},
+    {"name": "LVS",           "cmd": "calibre -lvs lvs.rules > {log}",     "log": "lvs.log"},
+]
+
+PASS_KW = ["SUCCEEDED","Completed","PASS","No errors","Finished"]
+FAIL_KW = ["FAILED","Error","Fatal","Aborted"]
+
+def parse_log(log_file):
+    if not os.path.exists(log_file): return "NO LOG"
+    with open(log_file) as f: content = f.read()
+    for k in PASS_KW:
+        if k in content: return "PASS"
+    for k in FAIL_KW:
+        if k in content: return "FAIL"
+    return "UNKNOWN"
+
+def run_flow(rtl_file):
+    os.makedirs(LOG_DIR, exist_ok=True)
+    print(f"\n=== VLSI Flow Automation ===")
+    print(f"    RTL: {rtl_file}\n")
+
+    results = []
+    for stage in FLOW_STAGES:
+        log_file = os.path.join(LOG_DIR, stage["log"])
+        cmd = stage["cmd"].replace("{rtl}", rtl_file).replace("{log}", log_file)
+        print(f"  [{stage['name']}] Running...", end="", flush=True)
+        start = datetime.datetime.now()
+        try:
+            subprocess.run(cmd, shell=True, timeout=600)
+            status = parse_log(log_file)
+        except subprocess.TimeoutExpired:
+            status = "TIMEOUT"
+        except Exception:
+            status = "ERROR"
+        elapsed = str(datetime.datetime.now() - start).split(".")[0]
+        color = "\033[92m" if status == "PASS" else "\033[91m"
+        print(f"  {color}{status}\033[0m  ({elapsed})")
+        results.append({"stage": stage["name"], "status": status, "time": elapsed, "log": log_file})
+
+        if status in ("FAIL","ERROR","TIMEOUT"):
+            print(f"\n  ⛔ Flow stopped at [{stage['name']}] — fix errors and re-run.\n")
+            break
+
+    save_excel(results)
+    return results
+
+def save_excel(results):
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Flow Results"
+    HDR=PatternFill("solid",start_color="1F3864"); GRN=PatternFill("solid",start_color="C6EFCE")
+    RED=PatternFill("solid",start_color="FFC7CE"); YLW=PatternFill("solid",start_color="FFEB9C")
+    ALT=PatternFill("solid",start_color="F2F2F2"); WHT=PatternFill("solid",start_color="FFFFFF")
+
+    for ci,h in enumerate(["Stage","Status","Runtime","Log File"],1):
+        c=ws.cell(1,ci,h); c.font=Font(bold=True,color="FFFFFF",name="Arial")
+        c.fill=HDR; c.alignment=Alignment(horizontal="center")
+    for col,w in zip("ABCD",[20,12,12,40]): ws.column_dimensions[col].width=w
+
+    for ri,r in enumerate(results,2):
+        bg=ALT if ri%2==0 else WHT
+        sf=GRN if r["status"]=="PASS" else RED if r["status"] in ("FAIL","ERROR") else YLW
+        ws.cell(ri,1,r["stage"]).fill=bg; ws.cell(ri,1).font=Font(name="Arial")
+        c=ws.cell(ri,2,r["status"]); c.fill=sf; c.font=Font(bold=True,name="Arial"); c.alignment=Alignment(horizontal="center")
+        ws.cell(ri,3,r["time"]).fill=bg; ws.cell(ri,3).font=Font(name="Arial")
+        ws.cell(ri,4,r["log"]).fill=bg; ws.cell(ri,4).font=Font(name="Arial")
+
+    wb.save(EXCEL_FILE)
+    print(f"\n  Flow report saved: {EXCEL_FILE}")
+
+def main():
+    print("\n=== VLSI Flow Automation ===\n")
+    rtl = input("Enter RTL file to run through flow: ").strip()
+    if not rtl or not os.path.exists(rtl):
+        print(f"  RTL file not found: {rtl}"); return
+    run_flow(rtl)
+
+if __name__ == "__main__":
+    main()
