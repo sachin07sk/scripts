@@ -1,0 +1,81 @@
+import os
+import shutil
+import unittest.mock
+import flow_automation
+
+def mock_subprocess_run(cmd, *args, **kwargs):
+    """
+    Intercepts shell commands sent by flow_automation.py 
+    and writes mock log files with appropriate keywords.
+    """
+    # Extract out the intended log file destination from the command line string
+    # e.g., "dc_shell -f synth.tcl > flow_logs/synth.log" -> "flow_logs/synth.log"
+    log_file = None
+    if ">" in cmd:
+        log_file = cmd.split(">")[-1].strip()
+    elif "lint.log" in cmd: # Special handling for vlint mapping
+        log_file = os.path.join(flow_automation.LOG_DIR, "lint.log")
+
+    if not log_file:
+        return
+
+    # Ensure log output directory exists
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+
+    # Determine which tool is running and write the corresponding mock log
+    if "lint" in log_file:
+        with open(log_file, "w") as f:
+            f.write("Linting analysis completed. Status: PASS. No errors found.")
+    elif "synth" in log_file:
+        with open(log_file, "w") as f:
+            f.write("DesignCompiler Synthesis Finished successfully. SUCCEEDED.")
+    elif "floorplan" in log_file:
+        with open(log_file, "w") as f:
+            f.write("Innovus Floorplan Stage Completed.")
+    elif "placement" in log_file:
+        with open(log_file, "w") as f:
+            f.write("Global and Detail Placement Finished. PASS.")
+    elif "cts" in log_file:
+        with open(log_file, "w") as f:
+            f.write("Clock Tree Synthesis (CTS) Completed successfully.")
+    elif "routing" in log_file:
+        with open(log_file, "w") as f:
+            f.write("NanoRoute Engine Finished. No errors.")
+    elif "sta" in log_file:
+        with open(log_file, "w") as f:
+            f.write("PrimeTime STA Signoff Analysis Report: PASS.")
+    elif "drc" in log_file:
+        with open(log_file, "w") as f:
+            f.write("Calibre DRC Execution FAILED. 14 Violations Detected!")
+    elif "lvs" in log_file:
+        with open(log_file, "w") as f:
+            f.write("Calibre LVS Verification Completed. PASS.")
+
+def run_automated_test():
+    dummy_rtl = "mock_design.v"
+    
+    print("\n=== Setting up Mock Environment ===")
+    # 1. Create a dummy RTL file so the script passes the 'os.path.exists' check
+    with open(dummy_rtl, "w") as f:
+        f.write("// Dummy Verilog File for Flow Testing\nmodule top; endmodule")
+    print(f"  Created temporary file: {dummy_rtl}")
+
+    # 2. Clear out any previous log runs to guarantee accurate testing
+    if os.path.exists(flow_automation.LOG_DIR):
+        shutil.rmtree(flow_automation.LOG_DIR)
+
+    print("\n=== Launching Patched Flow Automation ===")
+    
+    # 3. Patch subprocess.run so your script executes completely without EDA tools installed
+    with unittest.mock.patch("subprocess.run", side_effect=mock_subprocess_run):
+        results = flow_automation.run_flow(dummy_rtl)
+
+    print("\n=== Post-Run Verification ===")
+    print(f"  Total stages processed: {len(results)}")
+    
+    # Clean up the dummy RTL file
+    if os.path.exists(dummy_rtl):
+        os.remove(dummy_rtl)
+
+if __name__ == "__main__":
+    run_automated_test()
