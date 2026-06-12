@@ -1,0 +1,72 @@
+import os
+
+TEMPLATE = """========================================================
+Design For Test (DFT) & ATPG Report
+========================================================
+
+--- Fault Coverage Statistics ---
+Fault Coverage      : {fault_cov}%
+Total Faults        : {total_faults}
+Detected Faults     : {detected_faults}
+Undetected Faults   : {undetected_faults}
+ATPG Efficiency     : {atpg_eff}%
+
+--- Scan Chain Architecture ---
+Number of Scan Chains: {scan_chains}
+Total Scan Cells     : {scan_cells}
+
+--- Individual Chain Length Breakdown ---
+{chain_details}
+
+--- Production Patterns Summary ---
+Total Patterns       : {total_patterns}
+Stuck-at Patterns    : {stuck_at_patterns}
+Transition Patterns  : {transition_patterns}
+
+--- Memory BIST (MBIST) ---
+MBIST Coverage       : {mbist_cov}%
+Memories Tested      : {mem_tested}
+========================================================
+"""
+
+def generate_files():
+    # 1. Top Level Report (Full System - PASS Case)
+    top_chains = "\\n".join([f"  Chain {i} : length = 512" for i in range(1, 9)])
+    with open("dft_top.rpt", "w") as f:
+        f.write(TEMPLATE.format(
+            fault_cov="96.5", total_faults="125000", detected_faults="120625", 
+            undetected_faults="4375", atpg_eff="99.2",
+            scan_chains="8", scan_cells="4096", chain_details=top_chains,
+            total_patterns="1500", stuck_at_patterns="1000", transition_patterns="500",
+            mbist_cov="99.5", mem_tested="16"
+        ).replace("\\n", "\n"))
+
+    # 2. Block A Report (Subsystem Module - Marginally Passed)
+    block_a_chains = "\\n".join([f"  Chain {i} : length = 256" for i in range(1, 5)])
+    with open("dft_block_a.log", "w") as f:
+        f.write(TEMPLATE.format(
+            fault_cov="95.1", total_faults="45000", detected_faults="42795", 
+            undetected_faults="2205", atpg_eff="97.8",
+            scan_chains="4", scan_cells="1024", chain_details=block_a_chains,
+            total_patterns="650", stuck_at_patterns="450", transition_patterns="200",
+            mbist_cov="94.2", mem_tested="4"
+        ).replace("\\n", "\n"))
+
+    # 3. Low Coverage Report (Triggers the 'CHECK' warning status)
+    low_chains = "\\n".join([f"  Chain {i} : length = 128" for i in range(1, 3)])
+    with open("dft_low_coverage.txt", "w") as f:
+        f.write(TEMPLATE.format(
+            fault_cov="88.4", total_faults="18000", detected_faults="15912", 
+            undetected_faults="2088", atpg_eff="91.3",
+            scan_chains="2", scan_cells="256", chain_details=low_chains,
+            total_patterns="320", stuck_at_patterns="220", transition_patterns="100",
+            mbist_cov="89.1", mem_tested="2"
+        ).replace("\\n", "\n"))
+
+    print("Successfully generated 3 DFT test files:")
+    print("  -> dft_top.rpt          (Fault Coverage: 96.5% - PASS)")
+    print("  -> dft_block_a.log      (Fault Coverage: 95.1% - PASS)")
+    print("  -> dft_low_coverage.txt (Fault Coverage: 88.4% - CHECK)")
+
+if __name__ == "__main__":
+    generate_files()
